@@ -294,7 +294,7 @@ CREATE PROCEDURE Customer_Register
         RETURN -2;
 
         INSERT INTO Users (first_name, middle_name, last_name, username, password, email, dob)
-        VALUES( @first_name VARCHAR(30), @middle_name,@last_name,@username,@password, @email,@dob);
+        VALUES( @first_name, @middle_name,@last_name,@username,@password, @email,@dob);
 
         DECLARE @id INT = SCOPE_IDENTITY();
         INSERT INTO User_Phone(user_id, phone) VALUES (@id, @phone);
@@ -329,7 +329,7 @@ CREATE PROCEDURE Partner_Register
         RETURN -2;
 
         INSERT INTO Users (first_name, middle_name, last_name, username, password, email, dob)
-        VALUES( @first_name VARCHAR(30), @middle_name,@last_name,@username,@password, @email,@dob);
+        VALUES( @first_name, @middle_name,@last_name,@username,@password, @email,@dob);
 
         DECLARE @id INT = SCOPE_IDENTITY();
         INSERT INTO User_Phone(user_id, phone) VALUES (@id, @phone);
@@ -380,7 +380,7 @@ CREATE PROCEDURE Rider_Register
         RETURN -2;
 
         INSERT INTO Users (first_name, middle_name, last_name, username, password, email, dob)
-        VALUES( @first_name VARCHAR(30), @middle_name,@last_name,@username,@password, @email,@dob);
+        VALUES( @first_name, @middle_name,@last_name,@username,@password, @email,@dob);
 
         DECLARE @id INT = SCOPE_IDENTITY();
         INSERT INTO User_Phone(user_id, phone) VALUES (@id, @phone);
@@ -635,4 +635,40 @@ GO
 
 --ASSIGN ADMIN ZONE---------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
+GO 
+CREATE PROCEDURE Assign_Admin_Zone
+       @admin_id INT, 
+       @zone_id INT,
+       @super_admin_id INT
 
+    AS
+    BEGIN
+       IF NOT EXISTS (SELECT *
+                      FROM Admin 
+                      WHERE admin_id = @super_admin_id AND role = 'Super Admin')
+              RETURN -3;
+
+       DECLARE @curr_role varchar(20);
+       SELECT @curr_role = role 
+       FROM Admin 
+       WHERE admin_id = @admin_id;
+
+       IF @curr_role IS NULL
+        RETURN -1;       -- this person is not an admin
+
+       IF @curr_role <> 'Zone Admin'
+        RETURN -3;         -- only zone admins need a zone
+       
+        IF NOT EXISTS (SELECT * 
+                       FROM Zone 
+                       WHERE zone_id = @zone_id)
+              RETURN -1;
+
+       UPDATE Admin SET zone_id = @zone_id 
+              WHERE admin_id = @admin_id;
+        RETURN 0;
+     END;
+GO
+
+--ISSUE VOUCHER---------------------------------------------------------------------------
+--Jodie Mahmoud Amam 64-2713
