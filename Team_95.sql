@@ -261,13 +261,14 @@ BEGIN
 
 
 
+--ACTIVE VOUCHERS 4.2d --------------------------------------------------------------------------
+--Jodie Mahmoud Amam 64-2713
 
 
 
 
 
-
---REGISTERS-------------------------------------------------------------------------------------------------------
+--REGISTERS 4.3 a,b,c-------------------------------------------------------------------------------------------------------
 
 -- Jodie Mahmoud Amam 64-2713
 GO 
@@ -392,12 +393,12 @@ CREATE PROCEDURE Rider_Register
  GO
 
 
---LOGIC FUNCTIONS-------------------------------------------------------------------------------------------------------
+--LOGIN FUNCTION  4.3 d,e,f,g-------------------------------------------------------------------------------------------------------
 
 -- Jodie Mahmoud Amam 64-2713
 GO 
 CREATE FUNCTION CustomerLoginValidation
-    (@username VARCHAR(30, @password VARCHAR(30))
+    (@username VARCHAR(30), @password VARCHAR(30))
     RETURNS bit
 
     AS
@@ -414,7 +415,7 @@ GO
 -- Jodie Mahmoud Amam 64-2713
 GO 
 CREATE FUNCTION PartnerLoginValidation
-    (@username VARCHAR(30, @password VARCHAR(30))
+    (@username VARCHAR(30), @password VARCHAR(30))
     RETURNS bit
 
     AS
@@ -431,7 +432,7 @@ GO
 -- Jodie Mahmoud Amam 64-2713
 GO 
 CREATE FUNCTION RiderLoginValidation
-    (@username VARCHAR(30, @password VARCHAR(30))
+    (@username VARCHAR(30), @password VARCHAR(30))
     RETURNS bit
 
     AS
@@ -448,7 +449,7 @@ GO
 -- Jodie Mahmoud Amam 64-2713
 GO 
 CREATE FUNCTION AdminLoginValidation
-    (@username VARCHAR(30, @password VARCHAR(30))
+    (@username VARCHAR(30), @password VARCHAR(30))
     RETURNS bit
 
     AS
@@ -462,7 +463,7 @@ CREATE FUNCTION AdminLoginValidation
     END;
 GO
 
---CHANGE PASSWORD-------------------------------------------------------------------------------------------------------
+--CHANGE PASSWORD. 4.3 h-------------------------------------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
 GO 
 CREATE PROCEDURE Change_Password
@@ -490,7 +491,7 @@ CREATE PROCEDURE Change_Password
     END;
 GO
 
---CREATE ADMIN---------------------------------------------------------------------------
+--CREATE ADMIN  4.4 a---------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
 
 GO 
@@ -544,7 +545,7 @@ CREATE PROCEDURE Create_Admin
             RETURN -2;
         
         INSERT INTO Users (first_name, middle_name, last_name, username, password, email, dob)
-        VALUES( @first_name VARCHAR(30), @middle_name,@last_name,@username,@password, @email,@dob);
+        VALUES( @first_name, @middle_name,@last_name,@username,@password, @email,@dob);
 
         DECLARE @id INT = SCOPE_IDENTITY();
         INSERT INTO User_Phone(user_id, phone) VALUES (@id, @phone);
@@ -554,7 +555,7 @@ CREATE PROCEDURE Create_Admin
     END;
 GO
 
---APPROVE BUSINESS---------------------------------------------------------------------------
+--APPROVE BUSINES 4.4 b---------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
 
 GO 
@@ -566,14 +567,14 @@ CREATE PROCEDURE Approve_Business
     BEGIN
         DECLARE @role VARCHAR(20), @admin_zone INT, @status VARCHAR(20), @business_zone INT;
 
-        SELECT @role=role AS Role , @admin_zone=zone_id AS Zone_id 
+        SELECT @role=role , @admin_zone=zone_id AS Zone_id 
         FROM Admin
         WHERE admin_id=@admin_id;
 
         IF @role IS NULL 
         RETURN -3;  --this is not an admin
 
-        SELECT @status=status AS Status, @business_zone=zone_id AS Business_zone
+        SELECT @status=status, @business_zone=zone_id AS Business_zone
         FROM Business
         WHERE business_id=@business_id;
 
@@ -593,7 +594,7 @@ CREATE PROCEDURE Approve_Business
     END;
 GO
 
---REJECT BUSINESS---------------------------------------------------------------------------
+--REJECT BUSINESS. 4.4 c---------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
 
 GO 
@@ -605,14 +606,14 @@ CREATE PROCEDURE Reject_Business
     BEGIN
         DECLARE @role VARCHAR(20), @admin_zone INT, @status VARCHAR(20), @business_zone INT;
 
-        SELECT @role=role AS Role , @admin_zone=zone_id AS Zone_id 
+        SELECT @role=role , @admin_zone=zone_id AS Zone_id 
         FROM Admin
         WHERE admin_id=@admin_id;
 
         IF @role IS NULL 
         RETURN -3;  --this is not an admin
 
-        SELECT @status=status AS Status, @business_zone=zone_id AS Business_zone
+        SELECT @status=status, @business_zone=zone_id AS Business_zone
         FROM Business
         WHERE business_id=@business_id;
 
@@ -633,7 +634,7 @@ CREATE PROCEDURE Reject_Business
 GO
 
 
---ASSIGN ADMIN ZONE---------------------------------------------------------------------------
+--ASSIGN ADMIN ZONE  4.4 h---------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
 GO 
 CREATE PROCEDURE Assign_Admin_Zone
@@ -670,5 +671,102 @@ CREATE PROCEDURE Assign_Admin_Zone
      END;
 GO
 
---ISSUE VOUCHER---------------------------------------------------------------------------
+--ISSUE VOUCHER  4.4 i---------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
+GO
+CREATE PROCEDURE Issue_Voucher
+    @customer_id INT,
+    @promo_code VARCHAR(30),
+    @is_percentage BIT,
+    @amount DECIMAL(10,2),
+    @expiry_date DATE,
+    @admin_id INT
+  
+AS
+BEGIN
+    IF NOT EXISTS (SELECT *
+                    FROM Admin
+                    WHERE admin_id=@admin_id)
+            RETURN -3;
+    
+    IF NOT EXISTS (SELECT *
+                    FROM Users
+                    WHERE user_id=@customer_id)
+            RETURN -1;
+
+    IF EXISTS (SELECT *
+                FROM Users
+                WHERE account_status='Blacklisted')
+            RETURN -3;          -- blacklisted customer
+  ------- dol el conditions              
+                IF @promo_code IS NULL OR @is_percentage IS NULL OR @amount IS NULL OR @expiry_date IS NULL
+                RETURN -1;
+
+                IF @amount=0
+                RETURN -1;
+
+                IF @is_percentage=1 AND (@amount<1 OR @amount>100)
+                RETURN -1;
+                
+                IF @expiry_date < CAST(GETDATE()) AS today
+                RETURN -1;
+
+    IF EXISTS (SELECT *
+                FROM Voucher
+                WHERE promo_code=@promo_code)
+            RETURN -2;          -- el voucher da already mawgood fel table
+
+    INSERT INTO Voucher (promo_code, is_percentage, amount, expiry_date, status, customer_id)
+    VALUES (@promo_code, @is_percentage, @amount, @expiry_date, 'Unused', @customer_id);
+
+    RETURN 0;
+END;
+GO
+
+
+-- BLACKLIST CUSTOMER 4.4 k--------------------------------------------------------------------------
+--Jodie Mahmoud Amam 64-2713
+
+
+
+--LIFT CUSTOMER BLACKLIST  4.4 k--------------------------------------------------------------------------
+--Jodie Mahmoud Amam 64-2713
+
+GO 
+CREATE PROCEDURE Lift_Customer_Blacklist
+    @customer_id INT,
+    @admin_id INT
+
+AS 
+BEGIN
+
+    IF NOT EXISTS ( SELECT *
+                    FROM Admin
+                    WHERE admin_id=@admin_id);
+            RETURN -3;
+    
+    IF NOT EXISTS ( SELECT *
+                    FROM Customer
+                    WHERE customer_id=@customer_id);
+            RETURN -1;
+
+   IF NOT EXISTS ( SELECT *
+                    FROM Blacklist
+                    WHERE customer_id=@customer_id);
+            RETURN -4;          --bat2aked en da el customer el blacklisted
+    
+   IF NOT EXISTS ( SELECT *
+                    FROM Blacklist
+                    WHERE customer_id=@customer_id AND admin_id=@admin_id);
+            RETURN -3;          -- bat2aked en da el admin el aamalo blacklist
+
+    UPDATE Users SET account_status='Active'
+        WHERE user_id=@customer_id;
+    DELETE FROM Blacklist 
+        WHERE customer_id=@customer_id;
+    
+    RETURN 0;
+END;
+GO
+
+
