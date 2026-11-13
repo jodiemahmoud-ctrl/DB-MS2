@@ -37,7 +37,7 @@ BEGIN
            role VARCHAR(20) NOT NULL DEFAULT 'Super Admin',
            zone_id INT, 
            CONSTRAINT FK_Admin_User FOREIGN KEY (admin_id) REFERENCES Users(user_id),
-           CONSTRAINT FK_Admin_Zone FOREIGN KEY (zone_id) REFERENCES Zone(zone_id),
+           CONSTRAINT FK_Admin_Zone FOREIGN KEY (zone_id) REFERENCES Zone(zone_id)
            );
 
     CREATE TABLE Partner(
@@ -282,7 +282,7 @@ CREATE PROCEDURE Customer_Register
     @username VARCHAR(30),
     @password VARCHAR(30),
     @email VARCHAR(100),
-    @phone VARCHAR(11),
+    @phone CHAR(11),
     @dob date
 
     AS 
@@ -317,7 +317,7 @@ CREATE PROCEDURE Partner_Register
     @username VARCHAR(30),
     @password VARCHAR(30),
     @email VARCHAR(100),
-    @phone VARCHAR(11),
+    @phone CHAR(11),
     @dob date
 
     AS 
@@ -352,7 +352,7 @@ CREATE PROCEDURE Rider_Register
     @username VARCHAR(30),
     @password VARCHAR(30),
     @email VARCHAR(100),
-    @phone VARCHAR(11),
+    @phone CHAR(11),
     @dob date,
     @vehicle_type VARCHAR(30),
     @plate_no VARCHAR(15),
@@ -484,7 +484,7 @@ CREATE PROCEDURE Change_Password
                         WHERE user_id=@user_id AND password=@old_password)
             RETURN -1;
         
-        IF @new_password IS NULL OR @new_password <> @new_password_repeat OR @new_password=@old_password
+        IF @new_password IS NULL OR @new_password_repeat IS NULL OR @new_password <> @new_password_repeat OR @new_password=@old_password
         RETURN -1;
 
         UPDATE Users SET password=@new_password
@@ -505,7 +505,7 @@ CREATE PROCEDURE Create_Admin
     @username VARCHAR(30),
     @password VARCHAR(30),
     @email VARCHAR(100),
-    @phone VARCHAR(11),
+    @phone CHAR(11),
     @dob date,
     @role VARCHAR(20),
     @zone_id INT,
@@ -693,19 +693,19 @@ BEGIN
             RETURN -3;
     
     IF NOT EXISTS (SELECT *
-                    FROM Users
-                    WHERE user_id=@customer_id)
+                    FROM Customer
+                    WHERE customer_id=@customer_id)
             RETURN -1;
 
     IF EXISTS (SELECT *
                 FROM Users
-                WHERE account_status='Blacklisted')
+                WHERE user_id=@customer_id AND account_status='Blacklisted')
             RETURN -3;          -- blacklisted customer
   ------- dol el conditions              
                 IF @promo_code IS NULL OR @is_percentage IS NULL OR @amount IS NULL OR @expiry_date IS NULL
                 RETURN -1;
 
-                IF @amount=0
+                IF @amount<=0
                 RETURN -1;
 
                 IF @is_percentage=1 AND (@amount<1 OR @amount>100)
@@ -727,7 +727,7 @@ END;
 GO
 
 
--- BLACKLIST CUSTOMER 4.4 k--------------------------------------------------------------------------
+-- BLACKLIST CUSTOMER 4.4 j--------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
 GO
 CREATE PROCEDURE Blacklist_Customer
@@ -738,11 +738,6 @@ CREATE PROCEDURE Blacklist_Customer
 AS
 BEGIN
 
-    DECLARE @role varchar(20), @admin_zone int;
-
-    --SELECT @role=role, @admin_zone=zone_id
-   -- FROM Admin
-   -- WHERE admin_id=@admin_id;
 
     IF NOT EXISTS (SELECT *
                     FROM Admin
@@ -787,7 +782,7 @@ BEGIN
             SELECT O.order_id
             FROM Orders O
             INNER JOIN Cart C ON O.cart_id = C.cart_id
-            WHERE C.customer_id=@customer_id AND 0.status <> 'Cancelled' AND NOT EXISTS ( SELECT *
+            WHERE C.customer_id=@customer_id AND O.status <> 'Cancelled' AND NOT EXISTS ( SELECT *
                                                                                             FROM Suborder S
                                                                                             WHERE S.order_id=O.order_id AND (S.status='Delivered' OR S.status='Picked Up'));
 
