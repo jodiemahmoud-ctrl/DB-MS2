@@ -287,7 +287,7 @@ CREATE PROCEDURE Customer_Register
 
     AS 
     BEGIN
-        IF @first_name IS NULL OR @middle_name IS NULL 
+        IF @first_name IS NULL 
             OR @last_name IS NULL OR @username IS NULL 
             OR @password IS NULL OR @email IS NULL 
             OR @phone IS NULL 
@@ -322,7 +322,7 @@ CREATE PROCEDURE Partner_Register
 
     AS 
     BEGIN
-        IF @first_name IS NULL OR @middle_name IS NULL 
+        IF @first_name IS NULL 
             OR @last_name IS NULL OR @username IS NULL 
             OR @password IS NULL OR @email IS NULL 
             OR @phone IS NULL 
@@ -361,7 +361,7 @@ CREATE PROCEDURE Rider_Register
 
     AS 
     BEGIN
-        IF @first_name IS NULL OR @middle_name IS NULL 
+        IF @first_name IS NULL 
             OR @last_name IS NULL OR @username IS NULL 
             OR @password IS NULL OR @email IS NULL 
             OR @phone IS NULL OR @vehicle_type IS NULL 
