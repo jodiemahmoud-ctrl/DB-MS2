@@ -267,7 +267,7 @@ CREATE VIEW ActiveVouchers
 AS
     SELECT voucher_id, promo_code, customer_id, is_percentage, amount, expiry_date
     FROM Voucher
-    WHERE status='Unused' AND expiry_date >= CAST(GETDATE() AS today);
+    WHERE status='Unused' AND expiry_date >= CAST(GETDATE() AS DATE);
 GO
 
 
@@ -711,7 +711,7 @@ BEGIN
                 IF @is_percentage=1 AND (@amount<1 OR @amount>100)
                 RETURN -1;
                 
-                IF @expiry_date < CAST(GETDATE()AS today) 
+                IF @expiry_date < CAST(GETDATE()AS DATE) 
                 RETURN -1;
 
     IF EXISTS (SELECT *
@@ -835,7 +835,7 @@ BEGIN
 -- delete the blacklisted customer's unused vouchers from the table
     DELETE FROM Voucher 
     WHERE customer_id = @customer_id AND status = 'Unused';
-    
+
     RETURN 0;
 END;
 GO
