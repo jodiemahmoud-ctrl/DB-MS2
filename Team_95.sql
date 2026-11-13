@@ -263,9 +263,12 @@ BEGIN
 
 --ACTIVE VOUCHERS 4.2d --------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
-
-
-
+CREATE VIEW ActiveVouchers
+AS
+    SELECT voucher_id, promo_code, customer_id, is_percentage, amount, expiry_date
+    FROM Voucher
+    WHERE status='Unused' AND expiry_date >= CAST(GETDATE() AS today);
+GO
 
 
 --REGISTERS 4.3 a,b,c-------------------------------------------------------------------------------------------------------
@@ -354,7 +357,7 @@ CREATE PROCEDURE Rider_Register
     @vehicle_type VARCHAR(30),
     @plate_no VARCHAR(15),
     @license_no VARCHAR(20),
-    @zone_i INT
+    @zone_id INT
 
     AS 
     BEGIN
@@ -386,7 +389,7 @@ CREATE PROCEDURE Rider_Register
         DECLARE @id INT = SCOPE_IDENTITY();
         INSERT INTO User_Phone(user_id, phone) VALUES (@id, @phone);
         INSERT INTO Rider(rider_id, vehicle_type, plate_no, license_no, is_available, zone_id)
-        VALUES (@id, @vehicle_type, @plate_no, @license_np, 1, @zone_id);
+        VALUES (@id, @vehicle_type, @plate_no, @license_no, 1, @zone_id);
 
         RETURN 0;
     END;
@@ -567,14 +570,14 @@ CREATE PROCEDURE Approve_Business
     BEGIN
         DECLARE @role VARCHAR(20), @admin_zone INT, @status VARCHAR(20), @business_zone INT;
 
-        SELECT @role=role , @admin_zone=zone_id AS Zone_id 
+        SELECT @role=role , @admin_zone=zone_id 
         FROM Admin
         WHERE admin_id=@admin_id;
 
         IF @role IS NULL 
         RETURN -3;  --this is not an admin
 
-        SELECT @status=status, @business_zone=zone_id AS Business_zone
+        SELECT @status=status, @business_zone=zone_id 
         FROM Business
         WHERE business_id=@business_id;
 
@@ -584,7 +587,7 @@ CREATE PROCEDURE Approve_Business
         IF @role='Zone Admin' AND @admin_zone<>@business_zone
         RETURN -3;  --makes sure that zone admin works f one zone only
 
-        IF @status='Pending'
+        IF @status<>'Pending'
         RETURN -4;
 
         UPDATE Business SET status='Active'
@@ -606,14 +609,14 @@ CREATE PROCEDURE Reject_Business
     BEGIN
         DECLARE @role VARCHAR(20), @admin_zone INT, @status VARCHAR(20), @business_zone INT;
 
-        SELECT @role=role , @admin_zone=zone_id AS Zone_id 
+        SELECT @role=role , @admin_zone=zone_id 
         FROM Admin
         WHERE admin_id=@admin_id;
 
         IF @role IS NULL 
         RETURN -3;  --this is not an admin
 
-        SELECT @status=status, @business_zone=zone_id AS Business_zone
+        SELECT @status=status, @business_zone=zone_id 
         FROM Business
         WHERE business_id=@business_id;
 
@@ -623,7 +626,7 @@ CREATE PROCEDURE Reject_Business
         IF @role='Zone Admin' AND @admin_zone<>@business_zone
         RETURN -3;  --makes sure that zone admin works f one zone only
 
-        IF @status='Pending'
+        IF @status<>'Pending'
         RETURN -4;
 
         UPDATE Business SET status='Rejected'
@@ -708,7 +711,7 @@ BEGIN
                 IF @is_percentage=1 AND (@amount<1 OR @amount>100)
                 RETURN -1;
                 
-                IF @expiry_date < CAST(GETDATE()) AS today
+                IF @expiry_date < CAST(GETDATE()AS today) 
                 RETURN -1;
 
     IF EXISTS (SELECT *
@@ -726,7 +729,116 @@ GO
 
 -- BLACKLIST CUSTOMER 4.4 k--------------------------------------------------------------------------
 --Jodie Mahmoud Amam 64-2713
+GO
+CREATE PROCEDURE Blacklist_Customer
+    @customer_id INT, 
+    @admin_id INT,
+    @reason VARCHAR(255)
 
+AS
+BEGIN
+
+    DECLARE @role varchar(20), @admin_zone int;
+
+    --SELECT @role=role, @admin_zone=zone_id
+   -- FROM Admin
+   -- WHERE admin_id=@admin_id;
+
+    IF NOT EXISTS (SELECT *
+                    FROM Admin
+                    WHERE admin_id=@admin_id)
+            RETURN -3;
+
+    IF NOT EXISTS ( SELECT *
+                    FROM Customer
+                    WHERE customer_id=@customer_id)
+            RETURN -1;
+
+    IF @reason IS NULL
+          RETURN -1;
+    
+    IF EXISTS ( SELECT *
+                FROM Blacklist
+                WHERE customer_id=@customer_id)
+            RETURN -2;   -- reject el kan already blacklisted
+        
+    IF EXISTS ( SELECT *
+                FROM Admin
+                WHERE admin_id=@admin_id AND role='Zone Admin')
+            BEGIN
+                IF NOT EXISTS ( SELECT *
+                                FROM Address A
+                                INNER JOIN Admin Adm ON A.zone_id=Adm.zone_id
+                                WHERE A.customer_id=@customer_id AND Adm.admin_id=@admin_id)
+                        RETURN -3;
+            END;                --  zone admin bas beyblacklist customers in their zone
+
+-- hena ana ba blacklist
+    UPDATE Users SET account_status='Blacklisted'
+        WHERE user_id=@customer_id;
+
+    INSERT INTO Blacklist (customer_id, admin_id, reason)
+    VALUES (@customer_id, @admin_id, @reason);
+
+-- save all the orders that need to be cancelled f a new table
+    DECLARE @order TABLE (order_id INT)
+
+    INSERT INTO @order (order_id)
+            SELECT O.order_id
+            FROM Orders O
+            INNER JOIN Cart C ON O.cart_id = C.cart_id
+            WHERE C.customer_id=@customer_id AND 0.status <> 'Cancelled' AND NOT EXISTS ( SELECT *
+                                                                                            FROM Suborder S
+                                                                                            WHERE S.order_id=O.order_id AND (S.status='Delivered' OR S.status='Picked Up'));
+
+-- bashoof ad eh hayerga3 to the wallet (bas msh el cash)
+    DECLARE @refund DECIMAL(10,2);
+
+    SELECT @refund= SUM(P.amount -P.refunded_amount)
+    FROM Payment P
+    INNER JOIN @order X ON X.order_id=P.order_id
+    WHERE P.method<> 'Cash';
+
+-- if nothing was added
+    IF @refund IS NULL
+        SET @refund = 0;
+
+-- adding the money back to the wallet
+    UPDATE Customer SET wallet_balance= wallet_balance + @refund
+        WHERE customer_id=@customer_id;
+
+-- ba update el payments table
+    UPDATE P SET P.refunded_amount = P.amount
+    FROM Payment P
+    INNER JOIN @order X ON X.order_id=P.order_id;
+
+-- cancel el suborders wel orders
+    UPDATE S SET S.status = 'Cancelled'
+    FROM SubOrder S
+    INNER JOIN @order X ON X.order_id = S.order_id
+    WHERE S.status <> 'Cancelled';
+
+    UPDATE O SET O.status = 'Cancelled'
+    FROM Orders O
+    INNER JOIN @order X ON X.order_id = O.order_id;
+
+-- basheel el vouchers el kano fel cancelled orders w ba consider them unused aashan homa keda mahadesh estakhdemhom
+    UPDATE V SET V.status = 'Unused'
+    FROM Voucher V
+    INNER JOIN Orders O ON O.voucher_id = V.voucher_id
+    INNER JOIN @order X ON X.order_id = O.order_id;
+
+    UPDATE O SET O.voucher_id = NULL
+    FROM Orders O
+    INNER JOIN @order X ON X.order_id = O.order_id;
+
+-- delete the blacklisted customer's unused vouchers from the table
+    DELETE FROM Voucher 
+    WHERE customer_id = @customer_id AND status = 'Unused';
+    
+    RETURN 0;
+END;
+GO
 
 
 --LIFT CUSTOMER BLACKLIST  4.4 k--------------------------------------------------------------------------
@@ -742,22 +854,22 @@ BEGIN
 
     IF NOT EXISTS ( SELECT *
                     FROM Admin
-                    WHERE admin_id=@admin_id);
+                    WHERE admin_id=@admin_id)
             RETURN -3;
     
     IF NOT EXISTS ( SELECT *
                     FROM Customer
-                    WHERE customer_id=@customer_id);
+                    WHERE customer_id=@customer_id)
             RETURN -1;
 
    IF NOT EXISTS ( SELECT *
                     FROM Blacklist
-                    WHERE customer_id=@customer_id);
+                    WHERE customer_id=@customer_id)
             RETURN -4;          --bat2aked en da el customer el blacklisted
     
    IF NOT EXISTS ( SELECT *
                     FROM Blacklist
-                    WHERE customer_id=@customer_id AND admin_id=@admin_id);
+                    WHERE customer_id=@customer_id AND admin_id=@admin_id)
             RETURN -3;          -- bat2aked en da el admin el aamalo blacklist
 
     UPDATE Users SET account_status='Active'
